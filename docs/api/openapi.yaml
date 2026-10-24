@@ -1,0 +1,411 @@
+openapi: 3.0.3
+
+info:
+  title: Resume Analyzer API
+  description: >
+    API для автоматического извлечения навыков, образования и опыта из резюме,
+    оценки соответствия резюме вакансии и ранжирования кандидатов.
+  version: 1.0.0
+
+servers:
+  - url: https://example.com/api/v1
+
+tags:
+  - name: Analyses
+    description: Анализ резюме
+  - name: Candidates
+    description: Ранжирование кандидатов
+
+paths:
+  /resumes/{resumeId}/analyses:
+    post:
+      tags:
+        - Analyses
+      summary: Запустить анализ резюме
+      description: >
+        Извлекает навыки, образование и опыт из загруженного резюме
+        с помощью NLP/NER. Возвращает структурированный результат анализа.
+      operationId: analyzeResume
+      parameters:
+        - name: resumeId
+          in: path
+          required: true
+          description: Идентификатор загруженного резюме
+          schema:
+            type: integer
+            format: int64
+            example: 101
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - language
+              properties:
+                language:
+                  type: string
+                  description: Язык резюме
+                  enum: [ru, en]
+                  example: ru
+                confidenceThreshold:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 1
+                  description: >
+                    Порог уверенности модели. Если уверенность ниже порога,
+                    результат помечается для ручной проверки.
+                  example: 0.6
+                forceReanalysis:
+                  type: boolean
+                  description: Повторно запустить анализ, даже если результат уже существует
+                  example: false
+            example:
+              language: ru
+              confidenceThreshold: 0.6
+              forceReanalysis: false
+      responses:
+        '200':
+          description: Анализ выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'
+        '400':
+          description: Некорректные входные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_REQUEST
+                message: confidenceThreshold must be between 0 and 1
+        '404':
+          description: Резюме не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: RESUME_NOT_FOUND
+                message: Resume with id 101 not found
+        '422':
+          description: Не удалось извлечь текст из резюме
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: TEXT_EXTRACTION_FAILED
+                message: Unable to extract text from the uploaded resume
+        '500':
+          description: Внутренняя ошибка ML-сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: MODEL_UNAVAILABLE
+                message: ML model is temporarily unavailable
+
+  /analyses/{analysisId}:
+    get:
+      tags:
+        - Analyses
+      summary: Получить результат анализа резюме
+      description: Возвращает ранее сохранённый результат анализа.
+      operationId: getAnalysis
+      parameters:
+        - name: analysisId
+          in: path
+          required: true
+          description: Идентификатор результата анализа
+          schema:
+            type: integer
+            format: int64
+            example: 5001
+      responses:
+        '200':
+          description: Результат анализа найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'
+        '404':
+          description: Результат анализа не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: ANALYSIS_NOT_FOUND
+                message: Analysis with id 5001 not found
+        '500':
+          description: Внутренняя ошибка сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INTERNAL_ERROR
+                message: Internal server error
+
+  /vacancies/{vacancyId}/candidates:
+    get:
+      tags:
+        - Candidates
+      summary: Получить ранжированный список кандидатов
+      description: >
+        Возвращает кандидатов, отсортированных по убыванию оценки релевантности вакансии.
+        Можно фильтровать по навыку и минимальному опыту.
+      operationId: getRankedCandidates
+      parameters:
+        - name: vacancyId
+          in: path
+          required: true
+          description: Идентификатор вакансии
+          schema:
+            type: integer
+            format: int64
+            example: 77
+        - name: skill
+          in: query
+          required: false
+          description: Фильтр по наличию навыка
+          schema:
+            type: string
+            example: Python
+        - name: minExperience
+          in: query
+          required: false
+          description: Минимальный опыт работы в годах
+          schema:
+            type: number
+            format: float
+            minimum: 0
+            example: 2
+      responses:
+        '200':
+          description: Список кандидатов получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateList'
+        '400':
+          description: Некорректные параметры фильтрации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_QUERY_PARAMETER
+                message: minExperience must be a non-negative number
+        '404':
+          description: Вакансия не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: VACANCY_NOT_FOUND
+                message: Vacancy with id 77 not found
+
+components:
+  schemas:
+    AnalysisResult:
+      type: object
+      required:
+        - id
+        - resumeId
+        - status
+        - confidence
+        - modelVersion
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 5001
+        resumeId:
+          type: integer
+          format: int64
+          example: 101
+        status:
+          type: string
+          enum: [completed, needs_manual_review, failed]
+          example: completed
+        skills:
+          type: array
+          description: Извлечённые навыки
+          items:
+            type: object
+            required:
+              - name
+              - confidence
+            properties:
+              name:
+                type: string
+                example: Python
+              confidence:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 1
+                example: 0.97
+              normalizedName:
+                type: string
+                description: Нормализованное название навыка
+                example: Python
+        education:
+          type: array
+          description: Извлечённое образование
+          items:
+            type: object
+            required:
+              - institution
+              - degree
+            properties:
+              institution:
+                type: string
+                example: НГУ
+              degree:
+                type: string
+                example: Бакалавр
+              specialty:
+                type: string
+                example: Мехатроника и робототехника (ИИ)
+              startYear:
+                type: integer
+                example: 2018
+              endYear:
+                type: integer
+                example: 2022
+        experience:
+          type: array
+          description: Извлечённый опыт работы
+          items:
+            type: object
+            required:
+              - company
+              - position
+            properties:
+              company:
+                type: string
+                example: 'ООО "Технологии"'
+              position:
+                type: string
+                example: Data Analyst
+              startDate:
+                type: string
+                format: date
+                example: '2022-03-01'
+              endDate:
+                type: string
+                format: date
+                nullable: true
+                example: null
+              description:
+                type: string
+                example: Анализ данных и построение отчётов
+              durationMonths:
+                type: integer
+                example: 18
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Уверенность модели в извлечённых данных
+          example: 0.91
+        modelVersion:
+          type: string
+          example: resume-ner-v1.2.0
+        requiresManualReview:
+          type: boolean
+          description: Необходимость ручной проверки
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-10-24T10:15:00Z'
+
+    CandidateList:
+      type: object
+      required:
+        - vacancyId
+        - total
+        - candidates
+      properties:
+        vacancyId:
+          type: integer
+          format: int64
+          example: 21
+        total:
+          type: integer
+          example: 2
+        candidates:
+          type: array
+          items:
+            type: object
+            required:
+              - resumeId
+              - analysisId
+              - matchId
+              - score
+              - status
+            properties:
+              resumeId:
+                type: integer
+                format: int64
+                example: 101
+              analysisId:
+                type: integer
+                format: int64
+                example: 5001
+              matchId:
+                type: integer
+                format: int64
+                example: 9001
+              candidateName:
+                type: string
+                example: Иван Иванов
+              score:
+                type: number
+                format: float
+                example: 84.5
+              status:
+                type: string
+                enum: [relevant, partially_relevant, not_relevant]
+                example: relevant
+              keySkills:
+                type: array
+                items:
+                  type: string
+                example: [Python, SQL, NLP]
+              experienceYears:
+                type: number
+                format: float
+                example: 3.5
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Машиночитаемый код ошибки
+          example: INVALID_REQUEST
+        message:
+          type: string
+          description: Описание ошибки
+          example: Text must not be empty
+        details:
+          type: object
+          additionalProperties: true
+          description: Дополнительные сведения об ошибке
+          example:
+            field: resumeId
