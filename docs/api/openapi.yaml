@@ -34,7 +34,7 @@ paths:
           schema:
             type: integer
             format: int64
-            example: 101
+          example: 101
       requestBody:
         required: true
         content:
@@ -125,7 +125,7 @@ paths:
           schema:
             type: integer
             format: int64
-            example: 5001
+          example: 5001
       responses:
         '200':
           description: Результат анализа найден
@@ -169,14 +169,14 @@ paths:
           schema:
             type: integer
             format: int64
-            example: 77
+          example: 77
         - name: skill
           in: query
           required: false
           description: Фильтр по наличию навыка
           schema:
             type: string
-            example: Python
+          example: Python
         - name: minExperience
           in: query
           required: false
@@ -185,7 +185,7 @@ paths:
             type: number
             format: float
             minimum: 0
-            example: 2
+          example: 2
       responses:
         '200':
           description: Список кандидатов получен
@@ -220,7 +220,6 @@ components:
         - id
         - resumeId
         - status
-        - confidence
         - modelVersion
         - createdAt
       properties:
@@ -317,7 +316,9 @@ components:
           format: float
           minimum: 0
           maximum: 1
-          description: Уверенность модели в извлечённых данных
+          description: >
+            Уверенность модели. Присутствует для status=completed и
+            status=needs_manual_review. Для status=failed может отсутствовать.
           example: 0.91
         modelVersion:
           type: string
@@ -374,6 +375,9 @@ components:
               score:
                 type: number
                 format: float
+                minimum: 0
+                maximum: 100
+                description: Оценка релевантности кандидата вакансии по шкале 0–100.
                 example: 84.5
               status:
                 type: string
