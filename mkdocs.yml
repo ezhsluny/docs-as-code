@@ -14,4 +14,8 @@ nav:
       - Требования: project/requirements.md
       - Диаграммы: project/diagrams.md
   - API:
-      - Обзор API: api/index.md
+      - Описание API: api/index.md
+  - ML:
+      - Model Card: ml/model-card.md
+      - Data Sheet: ml/dataset.md
+      - Риски: ml/risks.md
